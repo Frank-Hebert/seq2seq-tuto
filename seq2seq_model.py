@@ -180,6 +180,8 @@ decoder_net = Decoder(
 ).to(device)
 
 model = Seq2Seq(encoder_net, decoder_net).to(device)
+optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+
 
 pad_idx = english.vocab.stoi["<pad>"]
 criterion = nn.CrossEntropyLoss(ignore_index=pad_idx)
@@ -187,11 +189,20 @@ criterion = nn.CrossEntropyLoss(ignore_index=pad_idx)
 if load_model:
     load_checkpoint(torch.load("my_checkpoint.pth.ptar"), model, optimizer)
 
+sentence = "ein boot mit mehreren männern darauf wird von einem großen pferdegespann ans ufer gezogen."
+
 for epoch in range(num_epochs):
     print(f"Epoch [{epoch} / {num_epochs}]")
 
     checkpoint = {"state_dict": model.state_dict(), "optimizer": optimizer.state_dict()}
     save_checkpoint(checkpoint)
+
+    model.eval()
+    translated_sentence = translate_sentence(
+        model, sentence, german, english, device, max_length=50
+    )
+    print(f"Translated example sentence \n {translated_sentence}")
+    model.train()
 
     for batch_idx, batch in enumerate(train_iterator):
         inp_data = batch.src.to(device)
@@ -199,3 +210,17 @@ for epoch in range(num_epochs):
 
         output = model(inp_data, target)
         # output.shape = (trg_len, batch_size, output_dim)
+
+        output = output[1:].reshape(-1, output.shape[2])
+        target = target[1:].reshape(-1)
+
+        optimizer.zero_grad()
+        loss = criterion(output, target)
+
+        loss.backward()
+
+        torch.nn.utils.clip_grad_norm(model.parameters(), max_norm=1)
+        optimizer.step()
+
+        writer.add_scalar("Training Loss", loss, global_step=step)
+        step += 1
