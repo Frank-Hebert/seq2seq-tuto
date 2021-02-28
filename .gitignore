@@ -1,2 +1,5 @@
 .vscode
 Pipfile
+__pycache__
+.data/multi30k
+runs/Loss_plot
